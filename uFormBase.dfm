@@ -1,0 +1,20 @@
+object FormBase: TFormBase
+  Left = 0
+  Top = 0
+  BorderStyle = bsSizeToolWin
+  Caption = 'FormBase'
+  ClientHeight = 60
+  ClientWidth = 593
+  Color = clBtnFace
+  Font.Charset = DEFAULT_CHARSET
+  Font.Color = clWindowText
+  Font.Height = -11
+  Font.Name = 'Tahoma'
+  Font.Style = []
+  GlassFrame.Enabled = True
+  GlassFrame.SheetOfGlass = True
+  OldCreateOrder = False
+  PopupMode = pmExplicit
+  PixelsPerInch = 96
+  TextHeight = 13
+end
