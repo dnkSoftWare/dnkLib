@@ -2,7 +2,8 @@ unit uMyUpdate;
 
 interface
  Uses Windows, Vcl.Forms, SysUtils, System.IniFiles, System.Classes, Generics.Collections,
-      StrUtils, System.TypInfo, ShellApi, Vcl.ExtCtrls, MyThreadingUnit; //, Vcl.Dialogs, System.UITypes;
+      StrUtils, System.TypInfo, ShellApi, Vcl.ExtCtrls, MyThreadingUnit, Winapi.Messages, Vcl.Controls,
+      RegularExpressions;
 
 const
 	SDelAfterUnpack     = 'DelAfterUnpack';
@@ -17,7 +18,7 @@ const
 
 type
   TAfterUpdate = (auNothing, auShowInfo, auRestart, auForceRestart);
-
+  TUpdateFrom = (ufLocal, ufFtp);
   TCheckFolder = type string;
 
   TUpdateFile = record
@@ -28,11 +29,32 @@ type
 				False; ADelAfterUnpack: Boolean = False): TUpdateFile; static;
   end;
 
+  TVersNum = 0..MaxInt;
+
+  TVersionInfo = class(TPersistent)
+   private
+    FMajorVersion: TVersNum;
+    FMinorVersion: TVersNum;
+ 		FRelease: TVersNum;
+    FBuild: TVersNum;
+    FComponent:TComponent;
+    procedure SetVersion(Index: Integer; const Value: TVersNum);
+  public
+    constructor Create(AComponent: TComponent);
+    function ToInt: integer;
+    function ToStr: string;
+  published
+    property MajorVersion: TVersNum index 0 read FMajorVersion write SetVersion default 0;
+    property MinorVersion: TVersNum index 1 read FMinorVersion write SetVersion default 0;
+    property Release: TVersNum index 2 read FRelease write Setversion default 0;
+    property Build: TVersNum index 3 read FBuild  write SetVersion default 0;
+  end;
+
+
 	TMyUpdate = class(TComponent)
     Const	cArchiveBuilder: string = '7za.exe';
     const cRestartBat: String = 'restart.bat';
 	private
-
 		FAboutNewVersion: string;
 		FAppDir: string;
 		FCheckFolder: TCheckFolder;
@@ -49,7 +71,12 @@ type
 		FUpdateFiles: TList<TUpdateFile>;
     CheckThread:TMyThread1;
 		FAutoStart: Boolean;
+
+		FStarted: Boolean;
 		FCheckIntervalInSec: Integer;
+		FOnNeedRestart: TNotifyEvent;
+    FUpdateFrom: TUpdateFrom;
+    FVersion: TVersionInfo;
    	UpdateThread: TMyThread2;
 		procedure AlertInterval;
 		procedure CopyFile(AFromFile, AToFolder: string);
@@ -60,15 +87,16 @@ type
 		procedure RestartApp;
 		procedure SetAutoStart(const Value: Boolean);
 		procedure SetCheckIntervalInSec(Value: Integer);
+    procedure SetVersion(const Value: TVersionInfo);
+		procedure Start(Sender: TObject; var Done: Boolean);
 		procedure UnPack(AArchName, AUnPackFolder: string);
 		function VersToInt(AVersion: string): Integer;
-
 	protected
 		procedure Loaded; override;
 		procedure _DoHaveUpdate;
 	public
 		constructor Create(AOwner: TComponent; AFolderName: string;	ACheckIntervalInSec: Integer = 0); overload;
-		constructor Create(AOwner: TComponent); overload; override;
+    constructor Create(AOwner: TComponent); overload; override;
 		destructor Destroy; override;
 		procedure DoUpdate;
 		procedure DoUpdateInThread;
@@ -82,19 +110,26 @@ type
 		property CheckFolder: TCheckFolder read FCheckFolder write FCheckFolder;
 		property CheckIntervalInSec: Integer read FCheckIntervalInSec write SetCheckIntervalInSec default 0;
 		property OnHaveUpdate: TNotifyEvent read FOnHaveUpdate write FOnHaveUpdate default nil;
+		property OnNeedRestart: TNotifyEvent read FOnNeedRestart write FOnNeedRestart;
+    property UpdateFrom: TUpdateFrom read FUpdateFrom write FUpdateFrom;
+    property Version: TVersionInfo read FVersion write SetVersion;
+
 	end;
 
-  function GetVersionApp: string;
+  function GetExeVersionApp: string;
 	function FileExec(const CmdLine: String; bHide: Boolean = True; bWait: Boolean
 			= True): Boolean;
 
-procedure Register;
+  procedure Register;
 
 implementation
    Uses dnkMessage;
-
+procedure Register;
+begin
+  RegisterComponents('MyUpdate', [TMyUpdate]);
+end;
 // Функция возвращает номер версии приложения записанное в EXE
-function GetVersionApp: string;
+function GetExeVersionApp: string;
 var
   VerInfoSize: DWORD;
   VerInfo: Pointer;
@@ -148,34 +183,25 @@ begin
 		 CloseHandle(ProcessInfo.hProcess);
 end;
 
-procedure Register;
-begin
- RegisterComponents('MyUpdate', [TMyUpdate]);
-end;
-
 constructor TMyUpdate.Create(AOwner: TComponent; AFolderName: string;
 		ACheckIntervalInSec: Integer = 0);
 begin
 	inherited Create(AOwner);
- // FOwner:=AOwner;
   FAboutNewVersion:='';
   FCheckFolder:= IncludeTrailingBackslash( AFolderName );
   FNewVersion:='0';
   FUpdateFiles:=TList<TUpdateFile>.Create;
   FHaveUpdate:=False;
+  FStarted:=False;
   FAfterUpdate:=auNothing;
   FCheckIntervalInSec:=ACheckIntervalInSec;
-//  if not (csDesigning in ComponentState) then
-//   begin
-      FMainApp:= ExtractFileName( Application.ExeName );
-      FUpdateInfoFileName:= ChangeFileExt(FMainApp , '.upd' );
-      FAppDir:= ExtractFilePath( Application.ExeName );
-      FCurrentVersion:= GetVersionApp;
-
-      FOldMainApp:=ChangeFileExt(FMainApp, FCurrentVersion + '.bak');
-      UpdateThread:=TMyThread2.Create;
-			StartCheckUpdate;
-//   end;
+  FMainApp:= ExtractFileName( ParamStr(0) );
+  FUpdateInfoFileName:= ChangeFileExt(FMainApp , '.upd' );
+  FAppDir:= ExtractFilePath( ParamStr(0) );
+  FOldMainApp:=ChangeFileExt(FMainApp, FCurrentVersion + '.bak');
+  Fversion:=TVersionInfo.Create(Self);
+  FCurrentVersion:= FVersion.ToStr;//GetExeVersionApp;
+  UpdateThread:=TMyThread2.Create;
 end;
 
 constructor TMyUpdate.Create(AOwner: TComponent);
@@ -188,12 +214,16 @@ begin
   FHaveUpdate:=False;
   FAfterUpdate:=auNothing;
   FCheckIntervalInSec:=0;
-  FMainApp:= ExtractFileName( Application.ExeName );
-  FAppDir:= ExtractFilePath( Application.ExeName );
-  FUpdateInfoFileName:= ChangeFileExt(FMainApp , '.upd' );
   FCurrentVersion:= '';
   FOldMainApp:='';
-//  FAutoStart:=False;
+  FStarted:=False;
+  FAutoStart:=False;
+  FMainApp:= ExtractFileName( ParamStr(0) );
+  FAppDir:= ExtractFilePath( ParamStr(0) );
+  FUpdateInfoFileName:= ChangeFileExt(FMainApp , '.upd' );
+  Fversion:=TVersionInfo.Create(Self);
+  //FVersion.SetSubcomponent(true);
+  FCurrentVersion:= FVersion.ToStr;
   UpdateThread:=TMyThread2.Create;
 end;
 
@@ -202,7 +232,7 @@ begin
   if Assigned( FUpdateFiles ) then  FreeAndNil(FUpdateFiles);
   if Assigned( UpdateThread )  then UpdateThread.Terminate;
   if Assigned( CheckThread ) then CheckThread.Terminate;
-
+  FreeAndNil( FVersion );
 	inherited;
 end;
 
@@ -229,10 +259,24 @@ var
 begin
      // или молча перезапускаемся, или спрашиваем, или уведомляем о полученном обновлении
         case FAfterUpdate of
-         auShowInfo:M:=TMessageForm.Create(Owner,'Внимание', 'Было получено обновление:'+FNewVersion+'. Требуется перезапуск программы!', 5000);
-         auRestart: if MessageBox(0, PChar('Обновление получено!' + #13#10 +
-           'Перезапустить программу?'), PChar('Внимание'), MB_YESNO +
-           MB_ICONQUESTION + MB_TOPMOST) = IDYES then  begin RestartApp end;
+         auShowInfo:begin
+                     M:=TMessageForm.Create(Owner,'Внимание', 'Было получено обновление:'+FNewVersion+'. Требуется перезапуск программы!', 5000);
+                     if RenameFile(FAppDir + FMainApp,FAppDir + FOldMainApp) then // Текущий в старый
+                      if RenameFile(FAppDir + FNewMainApp,FAppDir + FMainApp) then // Новый в текущий
+                       begin
+                       if Assigned(OnNeedRestart) then OnNeedRestart(Self);
+                       end
+                        else MessageBox(0,
+                          'Не удалось переименовать файлы обновления!',
+                          PChar(Application.Title), MB_OK +
+                          MB_ICONWARNING + MB_TOPMOST);
+
+                    end;
+         auRestart: begin if MessageBox(0, PChar('Обновление получено!' + #13#10 +
+                                           'Перезапустить программу?'), PChar('Внимание'), MB_YESNO +
+                                      MB_ICONQUESTION + MB_TOPMOST) = IDYES then  begin RestartApp end else
+                     if Assigned(OnNeedRestart) then OnNeedRestart(Self);
+                    end;
          auForceRestart: begin
                           MM:=TMessageForm.Create(Owner,'Внимание', 'Было получено обновление:'+FNewVersion+'. Перезапуск программы будет произведен автоматически!');
                           Sleep(2000);
@@ -243,12 +287,14 @@ end;
 
 procedure TMyUpdate.DoUpdate;
 begin
+  StopCheckThread;
   GetUpdateFiles;
 	DoRestart;
 end;
 
 procedure TMyUpdate.DoUpdateInThread;
 begin
+  StopCheckThread;
   UpdateThread.ExecuteProc(
    procedure
    begin
@@ -272,18 +318,21 @@ end;
 procedure TMyUpdate.GetUpdateFiles;
  var vFile:TUpdateFile;
 begin
+ case FUpdateFrom of
+   ufLocal:  for vFile in FUpdateFiles do
+              begin
+                if vFile.UpdateIfNotExist and (not FileExists(vFile.FileName)) then
+                  CopyFile(FCheckFolder + vFile.FileName, FAppDir);
+                if not vFile.UpdateIfNotExist then CopyFile(FCheckFolder + vFile.FileName, FAppDir);
+                if vFile.FileName.Contains('.zip') or vFile.FileName.Contains('.rar') or vFile.FileName.Contains('.7z') then
+                 begin
+                   UnPack(vFile.FileName, FAppDir);
+                   if vFile.DelAfterUnpack then DeleteFile(vFile.FileName);
+                 end;
+              end;
+   ufFtp: ;
+ end;
 
- for vFile in FUpdateFiles do
-  begin
-    if vFile.UpdateIfNotExist and (not FileExists(vFile.FileName)) then
-      CopyFile(FCheckFolder + vFile.FileName, FAppDir);
-    if not vFile.UpdateIfNotExist then CopyFile(FCheckFolder + vFile.FileName, FAppDir);
-    if vFile.FileName.Contains('.zip') or vFile.FileName.Contains('.rar') or vFile.FileName.Contains('.7z') then
-     begin
-       UnPack(vFile.FileName, FAppDir);
-       if vFile.DelAfterUnpack then DeleteFile(vFile.FileName);
-     end;
-  end;
   if FileExists(TMyUpdate.cArchiveBuilder) then DeleteFile(TMyUpdate.cArchiveBuilder);
 
 end;
@@ -336,17 +385,18 @@ begin
  Result:=False;
   if not FileExists(FCheckFolder + FUpdateInfoFileName) then Exit;
  GetUpdateVersion;
- GetCurrentVersion;
+// GetCurrentVersion;
  if not FHaveUpdate then
-  	FHaveUpdate := (VersToInt( FNewVersion ) > VersToInt( FCurrentVersion ));
+  	FHaveUpdate := (VersToInt( FNewVersion ) > FVersion.ToInt);//VersToInt( FCurrentVersion ));
   Result:=FHaveUpdate;
 end;
 
 procedure TMyUpdate.Loaded;
 begin
 	inherited Loaded;
-  if FAutoStart then
-    StartCheckUpdate;
+
+  if FAutoStart and (not FStarted) then
+    Application.OnIdle:= Start;
 end;
 
 procedure TMyUpdate.RestartApp;
@@ -371,9 +421,23 @@ begin
     AlertInterval;
 end;
 
+procedure TMyUpdate.SetVersion(const Value: TVersionInfo);
+begin
+  FVersion.Assign( Value );
+end;
+
+procedure TMyUpdate.Start(Sender: TObject; var Done: Boolean);
+begin
+ if FAutoStart and (not FStarted) then
+  begin
+   FStarted:=True;
+   StartCheckUpdate;
+  end;
+end;
+
 procedure TMyUpdate.StartCheckUpdate;
 begin
-  if FCurrentVersion = '' then FCurrentVersion:= GetVersionApp;
+  if FCurrentVersion = '' then FCurrentVersion:= FVersion.ToStr; //GetExeVersionApp;
   if FOldMainApp = '' then FOldMainApp:=ChangeFileExt(FMainApp, FCurrentVersion + '.bak');
 	if (FCheckIntervalInSec > 0) and FileExists(FCheckFolder + FUpdateInfoFileName) then
 	begin
@@ -398,7 +462,7 @@ begin
 														if MessageBox(0, PChar('Прекратить проверку ?'), PChar(Application.Title),
 															MB_YESNO + MB_ICONQUESTION + MB_TOPMOST) = IDYES then
 														begin
-															CheckThread.Suspend;
+															CheckThread.Stop;
 														end;
 										end;
 						 end )
@@ -409,7 +473,7 @@ end;
 
 procedure TMyUpdate.StopCheckThread;
 begin
- if Assigned(CheckThread) then CheckThread.Suspend;
+ if Assigned(CheckThread) then CheckThread.Stop;
 end;
 
 procedure TMyUpdate.UnPack(AArchName, AUnPackFolder: string);
@@ -419,8 +483,17 @@ begin
 end;
 
 function TMyUpdate.VersToInt(AVersion: string): Integer;
+ var V:TArray<String>;
+  a: Integer;
+  I: Integer;
+  J: Integer;
+  S:String;
 begin
-	Result := StrToInt( ReplaceStr(AVersion,'.','') ) ;
+  V:=TRegEx.Split(AVersion,'\.');
+  for I := Low(V) to High(V) do
+   begin a:=length(V[I]); for J := 1 to 3 - a do  V[I]:='0'+V[I]; S:=S+V[I]; end;
+
+	Result := StrToInt( S ) ;
 end;
 
 procedure TMyUpdate._DoHaveUpdate;
@@ -434,6 +507,38 @@ begin
 	Result.FileName:=AFileName;
   Result.UpdateIfnotExist:=AUpdateIfnotExist;
   Result.DelAfterUnpack:=ADelAfterUnpack;
+end;
+
+constructor TVersionInfo.Create(AComponent: TComponent);
+begin
+  FComponent:= AComponent;
+end;
+
+procedure TVersionInfo.SetVersion(Index: Integer; const Value: TVersNum);
+begin
+ case Index of
+  0:if FMajorVersion <> Value then FMajorVersion:= Value;
+  1:if FMinorVersion <> Value then FMinorVersion:=Value;
+  2:if FRelease <> Value then FRelease:=Value;
+  3:if FBuild <> Value then FBuild:=Value;
+ end;
+end;
+
+function TVersionInfo.ToInt: integer;
+ var a:Integer;
+  I: Integer;
+  b,d,e,f:String;
+begin
+  b:=IntToStr(FMajorVersion); //a:=length(b); for I := 1 to 3 - a do  b:='0'+b;
+  d:=IntToStr(FMinorVersion); a:=length(d); for I := 1 to 3 - a do  d:='0'+d;
+  e:=IntToStr(FRelease); a:=length(e); for I := 1 to 3 - a do  e:='0'+e;
+  f:=IntToStr(FBuild); a:=length(f); for I := 1 to 3 - a do  f:='0'+f;
+  Result := StrToInt( b + d + e + f );
+end;
+
+function TVersionInfo.ToStr: string;
+begin
+  Result :=  IntToStr(FMajorVersion) +'.'+ IntToStr(FMinorVersion)+'.' + IntToStr(FRelease)+'.' + IntToStr(FBuild) ;
 end;
 
 end.

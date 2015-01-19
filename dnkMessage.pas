@@ -103,7 +103,7 @@ begin
 //   mfpoScreenCenter:FForm.Position:=poScreenCenter;
 //  end;
 
-  FForm.FormStyle:=fsStayOnTop;
+  FForm.FormStyle:=fsNormal;
   FForm.BorderStyle:=bsToolWindow;
   P:=TLabel.Create(FForm);
   with P do

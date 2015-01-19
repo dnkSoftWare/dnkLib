@@ -3,7 +3,7 @@ unit dnkLib;
 interface
  Uses System.Classes, Vcl.Forms, Vcl.Controls, Vcl.Dialogs,
  Winapi.Windows, Winapi.Messages, Data.DB, System.SysUtils,
- RegularExpressions, cxGridDBTableView, uADCompClient, { UnitChild, } Variants,
+ RegularExpressions, cxGridDBTableView,  uADCompClient, { UnitChild, } Variants,
  Vcl.ExtActns, cxFilter, MSAccess;
 
  type

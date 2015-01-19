@@ -1,4 +1,4 @@
-unit Data.Table;
+п»їunit Data.Table;
 
 interface
   Uses SysUtils, StrUtils, Data.Win.ADODB, Generics.Collections, System.Variants;
@@ -31,7 +31,7 @@ type
 	end;
 
 	/// <summary>
-	///  Класс получения и записи данных в любую таблицу
+	///  В Р»Р°СЃСЃ РїРѕР»СѓС‡РµРЅРёВ¤ Рё Р·Р°РїРёСЃРё РґР°РЅРЅС‹С… РІ Р»СЋР±СѓСЋ С‚Р°Р±Р»РёС†Сѓ
 	/// </summary>
 	TGetSetTableData = class(TInterfacedObject, IGetSetTableData)
   private
@@ -145,7 +145,7 @@ begin
    FADOConnection.Execute(V, Result);
   end
    else
-    raise Exception.Create('Error! Количество полей не соответствует кол-ву значений!');
+    raise Exception.Create('Error! В РѕР»РёС‡РµСЃС‚РІРѕ РїРѕР»РµР№ РЅРµ СЃРѕРѕС‚РІРµС‚СЃС‚РІСѓРµС‚ РєРѕР»-РІСѓ Р·РЅР°С‡РµРЅРёР№!');
 end;
 
 constructor TFieldValue.Create(AVar: Variant);

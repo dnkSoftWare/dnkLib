@@ -15,7 +15,7 @@ type
 
 {$M-}
 
-function Settings: TAppSettings;
+function GetSettings: TAppSettings;
 
 implementation
 uses SysUtils, SerialLib;
@@ -23,13 +23,18 @@ uses SysUtils, SerialLib;
 var
   g_AppSettings: TAppSettings;
 
-function Settings: TAppSettings;
+function GetSettings: TAppSettings;
+ Var F:string;
 begin
   if not Assigned (g_AppSettings) then
-  begin
     g_AppSettings := TAppSettings.Create;
-    TIniSettings.Read (ChangeFileExt (ParamStr(0), '.ini'), g_AppSettings);
-  end;
+
+    F:=ChangeFileExt (ParamStr(0), '.ini');
+    if FileExists(F) then
+      TIniSettings.Read (F, g_AppSettings)
+    else
+      raise Exception.Create('File '+F+' not found!');
+
   Result := g_AppSettings;
 end;
 

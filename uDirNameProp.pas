@@ -19,6 +19,10 @@ implementation
 procedure Register;
 begin
  RegisterPropertyEditor(TypeInfo(TCheckFolder),TMyUpdate,'',TDirNameProp);
+ RegisterPropertyEditor(TypeInfo(TVersionInfo),
+    TMyUpdate,
+    'VersionInfo',
+    TClassProperty);
 end;
 
 procedure TDirNameProp.Edit;
@@ -30,7 +34,7 @@ end;
 
 function TDirNameProp.GetAttributes: TPropertyAttributes;
 begin
-	Result := [paDialog];
+ Result := [paDialog];
 end;
 
 function TDirNameProp.GetValue: string;

@@ -4,7 +4,7 @@ interface
 
 uses
   SysUtils, Windows, Messages, Classes, Graphics, Controls, Forms, Dialogs,
-  Uni, System.Variants, dnkLib, System.Generics.Collections, Data.DB;
+  MSAccess, System.Variants, dnkLib, System.Generics.Collections, Data.DB;
 
 type
   TCustomDir = class
@@ -108,16 +108,16 @@ function TDir.ExecProc(AProcName: string; AParams: Array of Variant): Variant;
 begin
   if Assigned(FConnection) then
     Result:=
-    (FConnection As TUniConnection).ExecProc(AProcName, AParams)
+    (FConnection As TMSConnection).ExecProc(AProcName, AParams)
 end;
 
 procedure TDir.ExecSQL(ASQL: string; AValues: Array of Variant);
 begin
   if Assigned(FConnection) then
    if SizeOf(AValues)>0 then
-    (FConnection As TUniConnection).ExecSQL(ASQL, AValues)
+    (FConnection As TMSConnection).ExecSQL(ASQL, AValues)
    else
-    (FConnection As TUniConnection).ExecSQL(ASQL);
+    (FConnection As TMsConnection).ExecSQL(ASQL);
 
 end;
 
@@ -127,12 +127,12 @@ begin
   if Assigned(FConnection) then
    if SizeOf(AValues)>0 then
     begin
-    (FConnection As TUniConnection).ExecSQLEx(ASQL, AValues);
-     Result:=(FConnection As TUniConnection).ParamByName(ARetParam).Value;
+    (FConnection As TMsConnection).ExecSQLEx(ASQL, AValues);
+     Result:=(FConnection As TMsConnection).ParamByName(ARetParam).Value;
     end
    else
     begin
-    (FConnection As TUniConnection).ExecSQLEx(ASQL,[]);
+    (FConnection As TMsConnection).ExecSQLEx(ASQL,[]);
      Result:=EmptyParam;
     end
 end;
@@ -219,13 +219,13 @@ end;
 
 procedure TDir.RefreshDS;
 begin
-  TUniQuery(FDataSet).Refresh;
+  TMSQuery(FDataSet).Refresh;
 end;
 
 procedure TDir.RefreshRecord;
 begin
- (DataSet as TUniQuery).KeyFields:='PosID';
- TUniQuery(FDataSet).RefreshRecord;
+ (DataSet as TMSQuery).KeyFields:='PosID';
+ TMSQuery(FDataSet).RefreshRecord;
 end;
 
 procedure TDir.SetCurrentPosID(const Value: Integer);
@@ -251,8 +251,8 @@ begin
  if Assigned(Self) then
  begin
   FDataSet:=AdataSet;
-  if FDataSet is TUniQuery then
-   FConnection:=(FDataSet As TUniQuery).Connection
+  if FDataSet is TMSQuery then
+   FConnection:=(FDataSet As TMSQuery).Connection
   else
    FConnection:=nil;
  end;

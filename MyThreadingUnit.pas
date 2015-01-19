@@ -12,7 +12,7 @@ type
     FInterval:Integer;
   public
     procedure Execute(); override;
-
+    procedure Stop;
     procedure Synchronize(AThreadProc: TThreadProcedure); overload; inline;
 
   public
@@ -74,7 +74,10 @@ type
 //---------------------------------------------------------------------------
 implementation
 
-
+procedure TMyThread1.Stop;
+begin
+  Terminate;
+end;
 //---------------------------------------------------------------------------
 constructor TMyThread1.Create(AInterval: Integer; AProc: TProc);
 begin
